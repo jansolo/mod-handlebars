@@ -5,17 +5,17 @@ import org.vertx.java.core.AsyncResult;
 /**
  * Created by jan_solo on 09.01.14.
  */
-public class AsyncResultWrapper<T>
-        implements AsyncResult {
+public class AsyncResultBase<T>
+        implements AsyncResult<T> {
 
     private T result;
     private Throwable cause;
 
-    public AsyncResultWrapper(T result) {
+    public AsyncResultBase(T result) {
         this.result = result;
     }
 
-    public AsyncResultWrapper(Throwable cause) {
+    public AsyncResultBase(Throwable cause) {
         this.cause = cause;
     }
 

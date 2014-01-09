@@ -1,6 +1,6 @@
 package com.dreikraft.vertx.template.handlebars;
 
-import com.dreikraft.vertx.AsyncResultWrapper;
+import com.dreikraft.vertx.AsyncResultBase;
 import com.dreikraft.vertx.template.TemplateManager;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Template;
@@ -29,13 +29,13 @@ public class HandlebarsTemplateManager implements TemplateManager {
             @Override
             public void handle(AsyncResult<Buffer> fileReadResult) {
                 if (fileReadResult.failed()) {
-                    renderHandler.handle(new AsyncResultWrapper(fileReadResult.cause()));
+                    renderHandler.handle(new AsyncResultBase<Buffer>(fileReadResult.cause()));
                 } else {
                     try {
                         final Template template = new Handlebars().compileInline(fileReadResult.result().toString("UTF-8"));
-                        renderHandler.handle(new AsyncResultWrapper<>(new Buffer(template.apply(data.toMap()))));
+                        renderHandler.handle(new AsyncResultBase<>(new Buffer(template.apply(data.toMap()))));
                     } catch (IOException ex) {
-                        renderHandler.handle(new AsyncResultWrapper<>(ex));
+                        renderHandler.handle(new AsyncResultBase<Buffer>(ex));
                     }
                 }
             }
