@@ -3,5 +3,7 @@
   "licenses": ["The Apache Software License Version 2.0"],
   "author": "Jan Illetschko",
   "keywords": ["handlebars", "template"],
-  "includes": "com.dreikraft:mod-utils:0.1"
+  "main": "com.dreikraft.vertx.template.handlebars.HandlebarsVerticle",
+  "worker": true,
+  "preserve-cwd": true
 }
