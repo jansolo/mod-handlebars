@@ -27,8 +27,31 @@ current working directory for templates.
 
 # Usage
 
+The module uses the vert.x event bus to request compiling and rendering of templates. mod-handlebar provides/supports
+following handler addresses and messages.
+
 ## Compile a template
 
+Compiles a template and puts the compiled template into a shared cache `handlebar.templates.cache` for later usage.
+
+- Address: `com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/render`
+- Message (String): `<path-to-template>`
+- Reply (Void)
+
+```java
+vertx.eventBus().sendWithTimeout(HandlebarsVerticle.ADDRESS_COMPILE_FILE, "templates/hello.hbs", 5000,
+        new AsyncResultHandler<Message<Void>>() {
+
+    @Override
+    public void handle(AsyncResult<Message<Void>> compileResult) {
+        if (compileResult.succeeded()) {
+            container.logger().info("compilation succeeded");
+            Template compiledTemplate = vertx.sharedData().getMap("handlebar.templates.cache").get(templateLocation);
+            ...
+        } else {
+            container.logger().error(renderResult.cause());
+        }
+```
 
 ## Render a template with data
 
@@ -36,8 +59,9 @@ Applies the data onto a template and sends back the rendered template as string 
 can not be found in the shared compiled template cache or if the template in the cache is outdated (does currently
 not check partials), the template will be compiled and put into the cache first.
 
-- Address: `com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/render`
-- Message: `{"templateLocation": "<path-to-template>", "data": {...}}`
+ - Address: `com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/render`
+ - Message (JSON): `{"templateLocation": "<path-to-template>", "data": {...}}`
+ - Reply (String): the rendered template
 
 ```java
 final JsonObject data = new JsonObject();
@@ -48,6 +72,7 @@ msg.putObject("data", data);
 
 vertx.eventBus().sendWithTimeout("com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/render",
                 msg, 5000, new AsyncResultHandler<Message<String>>() {
+
             @Override
             public void handle(AsyncResult<Message<String>> renderResult) {
                 if (renderResult.succeeded()) {
@@ -61,3 +86,22 @@ vertx.eventBus().sendWithTimeout("com.dreikraft.vertx.template.handlebars.Handle
 
 
 ## Flush the compiled template cache
+
+Removes all compiled templates from the shared cache `handlebar.templates.cache`.
+
+ - Address: `com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/flush`
+ - Message (Void)
+ - Reply (Void)
+
+ ```java
+vertx.eventBus().sendWithTimeout(HandlebarsVerticle.ADDRESS_FLUSH,
+         (Object) null, HandlebarsVerticle.REPLY_TIMEOUT, new AsyncResultHandler<Message<Void>>() {
+
+     @Override
+     public void handle(AsyncResult<Message<Void>> flushResult) {
+         if (flushResult.succeeded()) {
+            container.logger().info("flushing cache succeeded");
+         } else {
+            container.logger().error(renderResult.cause());
+          }
+ ```
