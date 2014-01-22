@@ -17,7 +17,7 @@ Deploy the module `3kraft~mod-handlebars~0.1` in the `start()` method of your ve
 ## Standalone
 
 ```
-vertx runmod 3kraft~mod-handlebars~0.
+vertx runmod 3kraft~mod-handlebars~0.1
 ```
 
 ## Configuration
@@ -27,8 +27,14 @@ current working directory for templates.
 
 # Usage
 
-The module uses the vert.x event bus to request compiling and rendering of templates. mod-handlebar provides/supports
-following handler addresses and messages.
+The module uses the vert.x event bus to request compiling and rendering of templates. The Handlebar.java library
+uses blocking I/O to read the templates from storage. Therefore the HandlebarVerticle gets deployed into the worker
+pool.
+
+The verticle searches templates (*.hbs) on the classpath and the current working directory (the module paramater
+`preserve-cwd` is enabled).
+
+The mod-handlebar provides/supports following handler addresses and messages.
 
 ## Compile a template
 
@@ -57,7 +63,7 @@ vertx.eventBus().sendWithTimeout(HandlebarsVerticle.ADDRESS_COMPILE_FILE, "templ
 
 Applies the data onto a template and sends back the rendered template as string in the reply handler. If the template
 can not be found in the shared compiled template cache or if the template in the cache is outdated (does currently
-not check partials), the template will be compiled and put into the cache first.
+not check partials inlcuded in the main template), the template will be compiled and put into the cache first.
 
  - Address: `com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/render`
  - Message (JSON): `{"templateLocation": "<path-to-template>", "data": {...}}`
@@ -103,5 +109,5 @@ vertx.eventBus().sendWithTimeout(HandlebarsVerticle.ADDRESS_FLUSH,
             container.logger().info("flushing cache succeeded");
          } else {
             container.logger().error(renderResult.cause());
-          }
+         }
  ```
