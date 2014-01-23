@@ -39,7 +39,7 @@ public class HandlebarsVerticleTest extends TestVerticle {
             public void handle(AsyncResult<String> asyncResult) {
                 // Deployment is asynchronous and this this handler will be called when it's complete (or failed)
                 if (asyncResult.failed()) {
-                    container.logger().error(asyncResult.cause());
+                    container.logger().error(asyncResult.cause().getMessage(), asyncResult.cause());
                 }
                 VertxAssert.assertTrue(asyncResult.succeeded());
                 VertxAssert.assertNotNull("deploymentID should not be null", asyncResult.result());

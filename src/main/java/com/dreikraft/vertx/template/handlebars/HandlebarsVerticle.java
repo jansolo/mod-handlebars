@@ -4,6 +4,7 @@ import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Template;
 import com.github.jknack.handlebars.io.TemplateSource;
 import com.github.jknack.handlebars.io.URLTemplateSource;
+import org.vertx.java.busmods.BusModBase;
 import org.vertx.java.core.AsyncResult;
 import org.vertx.java.core.AsyncResultHandler;
 import org.vertx.java.core.Handler;
@@ -13,7 +14,6 @@ import org.vertx.java.core.eventbus.ReplyException;
 import org.vertx.java.core.file.FileProps;
 import org.vertx.java.core.json.JsonObject;
 import org.vertx.java.core.logging.Logger;
-import org.vertx.java.platform.Verticle;
 
 import java.io.IOException;
 import java.net.URL;
@@ -24,12 +24,13 @@ import java.util.concurrent.ConcurrentMap;
  * Compiles and applies Handlebar Templates. The compile action blocks, and therefore should run in the worker event
  * loop.
  */
-public class HandlebarsVerticle extends Verticle {
+public class HandlebarsVerticle extends BusModBase {
 
     public static final String ADDRESS_BASE = HandlebarsVerticle.class.getName();
     public static final String ADDRESS_COMPILE_FILE = ADDRESS_BASE + "/compileFile";
     public static final String ADDRESS_RENDER_FILE = ADDRESS_BASE + "/renderFile";
     public static final String ADDRESS_FLUSH = ADDRESS_BASE + "/flush";
+    public static final String CONFIG_REPLY_TIMEOUT = "replyTimeout";
     public static final long REPLY_TIMEOUT = 5 * 1000;
     public static final String HANDLEBAR_TEMPLATES_CACHE = "handlebar.templates.cache";
     private static final int ERR_CODE_BASE = 100;
@@ -45,6 +46,7 @@ public class HandlebarsVerticle extends Verticle {
     private Handlebars handlebars;
     private ConcurrentMap<String, SharedTemplate> templateCache;
     private Logger logger;
+    private long replyTimeout;
 
     /**
      * Initialize the handlebar template handlers on the eventbus. Following handlers are registered:
@@ -68,6 +70,9 @@ public class HandlebarsVerticle extends Verticle {
     @Override
     public void start() {
 
+        // initialize the busmod
+        super.start();
+
         // initialize logger
         logger = container.logger();
         logger.info(String.format("starting %1$s ...", this.getClass().getSimpleName()));
@@ -76,6 +81,7 @@ public class HandlebarsVerticle extends Verticle {
         handlebars = new Handlebars();
         templateCache = vertx.sharedData().getMap(HANDLEBAR_TEMPLATES_CACHE);
         eb = vertx.eventBus();
+        replyTimeout = getOptionalLongConfig(CONFIG_REPLY_TIMEOUT, REPLY_TIMEOUT);
 
         // register event handlers
         logger.info(String.format("registering handler %1$s", ADDRESS_COMPILE_FILE));
@@ -199,7 +205,7 @@ public class HandlebarsVerticle extends Verticle {
                     } else {
                         logger.info(String.format("template %1$s is out of date and will be compiled",
                                 templateLocation));
-                        eb.sendWithTimeout(ADDRESS_COMPILE_FILE, templateLocation, REPLY_TIMEOUT,
+                        eb.sendWithTimeout(ADDRESS_COMPILE_FILE, templateLocation, replyTimeout,
                                 new CompileResultHandler(templateLocation, renderMsg));
 
                     }
