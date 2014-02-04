@@ -1,68 +1,47 @@
 package com.dreikraft.vertx.template.handlebars;
 
-import com.github.jknack.handlebars.Handlebars;
-import com.github.jknack.handlebars.Template;
-import com.github.jknack.handlebars.io.TemplateSource;
-import com.github.jknack.handlebars.io.URLTemplateSource;
 import org.vertx.java.busmods.BusModBase;
 import org.vertx.java.core.AsyncResult;
 import org.vertx.java.core.AsyncResultHandler;
 import org.vertx.java.core.Handler;
-import org.vertx.java.core.eventbus.EventBus;
 import org.vertx.java.core.eventbus.Message;
 import org.vertx.java.core.eventbus.ReplyException;
 import org.vertx.java.core.file.FileProps;
 import org.vertx.java.core.json.JsonObject;
-import org.vertx.java.core.logging.Logger;
 
 import java.io.IOException;
-import java.net.URL;
-import java.util.Date;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * Compiles and applies Handlebar Templates. The compile action blocks, and therefore should run in the worker event
- * loop.
+ * Applies data to Handlebar Templates. Will invoke template compilation, if the template is not already compiled. The
+ * compilation is passed to the {@link HandlebarsCompilerVerticle} which blocks and therefore runs in the worker pool.
  */
-public class HandlebarsVerticle extends BusModBase {
+public class HandlebarsRendererVerticle extends BusModBase {
 
-    public static final String ADDRESS_BASE = HandlebarsVerticle.class.getName();
-    public static final String ADDRESS_COMPILE_FILE = ADDRESS_BASE + "/compileFile";
+    public static final String ADDRESS_BASE = HandlebarsRendererVerticle.class.getName();
     public static final String ADDRESS_RENDER_FILE = ADDRESS_BASE + "/renderFile";
     public static final String ADDRESS_FLUSH = ADDRESS_BASE + "/flush";
-    public static final String CONFIG_REPLY_TIMEOUT = "replyTimeout";
-    public static final long REPLY_TIMEOUT = 5 * 1000;
+    public static final int ERR_CODE_BASE = 500;
+    public static final String FIELD_TEMPLATE_LOCATION = "templateLocation";
+    public static final String FIELD_DATA = "data";
+    public static final String FIELD_RENDER_RESULT = "renderResult";
+    public static final String CONFIG_AUTO_UPDATE = "autoUpdate";
     public static final String HANDLEBAR_TEMPLATES_CACHE = "handlebar.templates.cache";
-    private static final int ERR_CODE_BASE = 100;
-    private static final int ERR_CODE_TMPL_COMPILE_FAILED = ERR_CODE_BASE;
-    private static final String ERR_MSG_TMPL_COMPILE_FAILED = "failed to compile template: %1$s";
-    private static final int ERR_CODE_RENDER_FAILED = ERR_CODE_BASE + 1;
     private static final String ERR_MSG_RENDER_FAILED = "failed to render template %1$s with data %2$s";
-    private static final String FIELD_TEMPLATE_LOCATION = "templateLocation";
-    private static final String FIELD_DATA = "data";
     private static final String ERR_MSG_TEMPLATE_NOT_FOUND = "template not found %1$s";
-    private static final int ERR_CODE_TEMPLATE_NOT_FOUND = ERR_CODE_BASE + 2;
-    private EventBus eb;
-    private Handlebars handlebars;
     private ConcurrentMap<String, SharedTemplate> templateCache;
-    private Logger logger;
-    private long replyTimeout;
 
     /**
      * Initialize the handlebar template handlers on the eventbus. Following handlers are registered:
      * <p/>
      * <ul>
-     * <li>com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/render
+     * <li>com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/render
      * <p>renders a template with the given data:
      * <code>{"templateLocation": "templates/hello.hbs", "data": {...}}</code></p>
      * </li>
-     * <li>com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/compile
-     * <p>compiles a template with the given location on the classpath: "templates/hello.hbs"</p>
-     * </li>
-     * <li>com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/clean
+     * <li>com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/flush
      * <p>Flushes the shared template cache</p>
      * </li>
-     * </ul>
      * <p/>
      * Compiled templates are stored in a shared template cache. The verticle will check, if the template in the cache
      * is up-to-date based on its last-modified date.
@@ -72,22 +51,16 @@ public class HandlebarsVerticle extends BusModBase {
 
         // initialize the busmod
         super.start();
-
-        // initialize logger
-        logger = container.logger();
         logger.info(String.format("starting %1$s ...", this.getClass().getSimpleName()));
 
         // initilialize members
-        handlebars = new Handlebars();
         templateCache = vertx.sharedData().getMap(HANDLEBAR_TEMPLATES_CACHE);
-        eb = vertx.eventBus();
-        replyTimeout = getOptionalLongConfig(CONFIG_REPLY_TIMEOUT, REPLY_TIMEOUT);
 
         // register event handlers
-        logger.info(String.format("registering handler %1$s", ADDRESS_COMPILE_FILE));
-        eb.registerHandler(ADDRESS_COMPILE_FILE, new CompileFileMessageHandler());
         logger.info(String.format("registering handler %1$s", ADDRESS_RENDER_FILE));
         eb.registerHandler(ADDRESS_RENDER_FILE, new RenderFileMessageHandler());
+
+        // register flush handler
         logger.info(String.format("registering handler %1$s", ADDRESS_FLUSH));
         eb.registerHandler(ADDRESS_FLUSH, new FlushMessageHandler());
 
@@ -113,8 +86,12 @@ public class HandlebarsVerticle extends BusModBase {
             final JsonObject renderCtx = renderMsg.body();
             final String templateLocation = renderCtx.getString(FIELD_TEMPLATE_LOCATION);
             final SharedTemplate sharedTemplate = templateCache.get(templateLocation);
-            vertx.fileSystem().props(templateLocation, new TemplateUpToDateHandler(sharedTemplate, renderMsg,
-                    templateLocation));
+            if (getOptionalBooleanConfig(CONFIG_AUTO_UPDATE, true)) {
+                vertx.fileSystem().props(templateLocation, new TemplateUpToDateHandler(sharedTemplate, renderMsg,
+                        templateLocation));
+            } else {
+                render(sharedTemplate, renderMsg);
+            }
         }
 
         /**
@@ -126,18 +103,20 @@ public class HandlebarsVerticle extends BusModBase {
         private void render(final SharedTemplate sharedTemplate, final Message<JsonObject> renderMsg) {
             final JsonObject data = renderMsg.body().getObject(FIELD_DATA);
             try {
-                renderMsg.reply(sharedTemplate.getTemplate().apply(data.toMap()));
+                sendOK(renderMsg, new JsonObject().putString(FIELD_RENDER_RESULT,
+                        sharedTemplate.getTemplate().apply(data.toMap())));
             } catch (IOException e) {
-                logger.error(ERR_CODE_RENDER_FAILED, e);
-                renderMsg.fail(ERR_CODE_RENDER_FAILED, String.format(ERR_MSG_RENDER_FAILED,
-                        renderMsg.body().getString(FIELD_TEMPLATE_LOCATION), data.encode()));
+                final String msg = String.format(ERR_MSG_RENDER_FAILED,
+                        renderMsg.body().getString(FIELD_TEMPLATE_LOCATION), data.encode());
+                logger.error(msg, e);
+                renderMsg.fail(ERR_CODE_BASE, msg);
             }
         }
 
         /**
          * Handles the result from template compilation.
          */
-        private class CompileResultHandler implements AsyncResultHandler<Message<Void>> {
+        private class CompileResultHandler implements AsyncResultHandler<Message<JsonObject>> {
             private final String templateLocation;
             private final Message<JsonObject> renderMsg;
 
@@ -158,7 +137,7 @@ public class HandlebarsVerticle extends BusModBase {
              * @param compileResultMsg returns the rendered page
              */
             @Override
-            public void handle(AsyncResult<Message<Void>> compileResultMsg) {
+            public void handle(AsyncResult<Message<JsonObject>> compileResultMsg) {
                 if (compileResultMsg.succeeded()) {
                     render(templateCache.get(templateLocation), renderMsg);
                 } else {
@@ -205,46 +184,15 @@ public class HandlebarsVerticle extends BusModBase {
                     } else {
                         logger.info(String.format("template %1$s is out of date and will be compiled",
                                 templateLocation));
-                        eb.sendWithTimeout(ADDRESS_COMPILE_FILE, templateLocation, replyTimeout,
-                                new CompileResultHandler(templateLocation, renderMsg));
+                        eb.sendWithTimeout(HandlebarsCompilerVerticle.ADDRESS_COMPILE_FILE,
+                                new JsonObject().putString(HandlebarsRendererVerticle.FIELD_TEMPLATE_LOCATION,
+                                        templateLocation),
+                                30 * 1000, new CompileResultHandler(templateLocation, renderMsg));
 
                     }
                 } else {
-                    renderMsg.fail(ERR_CODE_TEMPLATE_NOT_FOUND,
-                            String.format(ERR_MSG_TEMPLATE_NOT_FOUND, templateLocation));
+                    renderMsg.fail(ERR_CODE_BASE, String.format(ERR_MSG_TEMPLATE_NOT_FOUND, templateLocation));
                 }
-            }
-        }
-    }
-
-    /**
-     * Compiles a template from given file and stores it into a shared map.
-     */
-    private class CompileFileMessageHandler implements Handler<Message<String>> {
-
-        /**
-         * Handles compile messages. Puts the compiled template (SharedTemplate.class) into the shared map
-         * "handlebar.templates.cache".
-         *
-         * @param compileMsg a string message with the location of the template in the classpath.
-         */
-        @Override
-        public void handle(final Message<String> compileMsg) {
-            if (logger.isDebugEnabled())
-                logger.debug(String.format("address %1$s received message: %2$s", compileMsg.address(),
-                        compileMsg.body()));
-            final String templateLocation = compileMsg.body();
-            final URL templateURL = Thread.currentThread().getContextClassLoader().getResource(templateLocation);
-            try {
-                final TemplateSource templateSource = new URLTemplateSource(templateLocation, templateURL);
-                final Template template = handlebars.compile(new URLTemplateSource(templateLocation, templateURL));
-                final SharedTemplate sharedTemplate = new SharedTemplate(template,
-                        new Date(templateSource.lastModified()));
-                templateCache.put(templateLocation, sharedTemplate);
-                compileMsg.reply();
-            } catch (IOException e) {
-                compileMsg.fail(ERR_CODE_TMPL_COMPILE_FAILED, String.format(ERR_MSG_TMPL_COMPILE_FAILED,
-                        templateLocation));
             }
         }
     }
@@ -252,7 +200,7 @@ public class HandlebarsVerticle extends BusModBase {
     /**
      * A Handler for flush messages on the event bus.
      */
-    private class FlushMessageHandler implements Handler<Message<Void>> {
+    private class FlushMessageHandler implements Handler<Message<JsonObject>> {
 
         /**
          * Flushes the shared template cache.
@@ -260,12 +208,12 @@ public class HandlebarsVerticle extends BusModBase {
          * @param flushMessage the flush message
          */
         @Override
-        public void handle(Message<Void> flushMessage) {
+        public void handle(Message<JsonObject> flushMessage) {
             if (logger.isDebugEnabled())
                 logger.debug(String.format("address %1$s received message",
                         flushMessage.address()));
             templateCache.clear();
-            flushMessage.reply();
+            sendOK(flushMessage);
         }
     }
 }

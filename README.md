@@ -22,8 +22,14 @@ vertx runmod 3kraft~mod-handlebars~0.1
 
 ## Configuration
 
-Currently there is no configuration possible/required. The module will search the classpath of the module and the
-current working directory for templates.
+The module will search the classpath of the module and the current working directory for templates.
+
+The module supports following configuration parameters:
+
+ - `autoUpdate`: If enabled, the Handlebars verticle will check for outdated templates in the internal shared cache.
+ Outdated templates will be automatically recompiled. The up-to-date check is performed by the `last-modified` date of
+ the template in the filesystem.
+ - `replyTimeout`: The internal timeout if the render event needs to compile a template first.
 
 # Usage
 
@@ -40,9 +46,9 @@ The mod-handlebar provides/supports following handler addresses and messages.
 
 Compiles a template and puts the compiled template into a shared cache `handlebar.templates.cache` for later usage.
 
-- Address: `com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/render`
-- Message (String): `<path-to-template>`
-- Reply (Void)
+ - Address: `com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/render`
+ - Message (String): `<path-to-template>`
+ - Reply (Void)
 
 ```java
 vertx.eventBus().sendWithTimeout(HandlebarsVerticle.ADDRESS_COMPILE_FILE, "templates/hello.hbs", 5000,
@@ -65,7 +71,7 @@ Applies the data onto a template and sends back the rendered template as string 
 can not be found in the shared compiled template cache or if the template in the cache is outdated (does currently
 not check partials inlcuded in the main template), the template will be compiled and put into the cache first.
 
- - Address: `com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/render`
+ - Address: `com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/render`
  - Message (JSON): `{"templateLocation": "<path-to-template>", "data": {...}}`
  - Reply (String): the rendered template
 
@@ -76,7 +82,7 @@ final JsonObject msg = new JsonObject();
 msg.putString("templateLocation", "templates/hello.hbs");
 msg.putObject("data", data);
 
-vertx.eventBus().sendWithTimeout("com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/render",
+vertx.eventBus().sendWithTimeout("com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/render",
                 msg, 5000, new AsyncResultHandler<Message<String>>() {
 
             @Override
@@ -95,7 +101,7 @@ vertx.eventBus().sendWithTimeout("com.dreikraft.vertx.template.handlebars.Handle
 
 Removes all compiled templates from the shared cache `handlebar.templates.cache`.
 
- - Address: `com.dreikraft.vertx.template.handlebars.HandlebarsVerticle/flush`
+ - Address: `com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/flush`
  - Message (Void)
  - Reply (Void)
 
