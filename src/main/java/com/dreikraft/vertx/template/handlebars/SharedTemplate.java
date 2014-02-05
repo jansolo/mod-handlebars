@@ -6,22 +6,36 @@ import org.vertx.java.core.shareddata.Shareable;
 import java.util.Date;
 
 /**
- * Created by jan_solo on 20.01.14.
+ * A shareable wrapper for the compiled template that can be put into the shared map.
  */
 public final class SharedTemplate implements Shareable {
 
     private final Template template;
     private final Date timestamp;
 
+    /**
+     * Creates a new immutable SharedTemplate instance.
+     *
+     * @param template
+     * @param timestamp
+     */
     public SharedTemplate(final Template template, final Date timestamp) {
         this.template = template;
         this.timestamp = new Date(timestamp.getTime());
     }
 
+    /**
+     * Gets the compiled template stored in this object.
+     * @return a compiled hanldebars template
+     */
     public Template getTemplate() {
         return template;
     }
 
+    /**
+     * Gets the timestamp when the template was compiled last.
+     * @return a timestamp
+     */
     public Date getTimestamp() {
         return new Date(timestamp.getTime());
     }

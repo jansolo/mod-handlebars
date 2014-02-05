@@ -18,15 +18,43 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class HandlebarsRendererVerticle extends BusModBase {
 
+    /**
+     * The event bus base address of this verticle.
+     */
     public static final String ADDRESS_BASE = HandlebarsRendererVerticle.class.getName();
-    public static final String ADDRESS_RENDER_FILE = ADDRESS_BASE + "/renderFile";
+    /**
+     * The event bus address to render a template.
+     */
+    public static final String ADDRESS_RENDER_FILE = ADDRESS_BASE + "/render";
+    /**
+     * The event bus address to flush the shared template cache.
+     */
     public static final String ADDRESS_FLUSH = ADDRESS_BASE + "/flush";
+    /**
+     * The error code returned by this verticle in case of an error.
+     */
     public static final int ERR_CODE_BASE = 500;
+    /**
+     * JSON property name "templateLocation" (String).
+     */
     public static final String FIELD_TEMPLATE_LOCATION = "templateLocation";
+    /**
+     * JSON property name "data" (JsonObject).
+     */
     public static final String FIELD_DATA = "data";
+    /**
+     * JSON property name "renderResult" (String).
+     */
     public static final String FIELD_RENDER_RESULT = "renderResult";
+    /**
+     * JSON property name "autoUpdate" (true/false)
+     */
     public static final String CONFIG_AUTO_UPDATE = "autoUpdate";
+    /**
+     * The name of the shared cache.
+     */
     public static final String HANDLEBAR_TEMPLATES_CACHE = "handlebar.templates.cache";
+
     private static final String ERR_MSG_RENDER_FAILED = "failed to render template %1$s with data %2$s";
     private static final String ERR_MSG_TEMPLATE_NOT_FOUND = "template not found %1$s";
     private ConcurrentMap<String, SharedTemplate> templateCache;
@@ -51,7 +79,6 @@ public class HandlebarsRendererVerticle extends BusModBase {
 
         // initialize the busmod
         super.start();
-        logger.info(String.format("starting %1$s ...", this.getClass().getSimpleName()));
 
         // initilialize members
         templateCache = vertx.sharedData().getMap(HANDLEBAR_TEMPLATES_CACHE);
@@ -63,8 +90,6 @@ public class HandlebarsRendererVerticle extends BusModBase {
         // register flush handler
         logger.info(String.format("registering handler %1$s", ADDRESS_FLUSH));
         eb.registerHandler(ADDRESS_FLUSH, new FlushMessageHandler());
-
-        logger.info(String.format("successfully started %1$s", this.getClass().getSimpleName()));
     }
 
     /**
@@ -209,9 +234,7 @@ public class HandlebarsRendererVerticle extends BusModBase {
          */
         @Override
         public void handle(Message<JsonObject> flushMessage) {
-            if (logger.isDebugEnabled())
-                logger.debug(String.format("address %1$s received message",
-                        flushMessage.address()));
+            logger.info("flushing handlebars template cache");
             templateCache.clear();
             sendOK(flushMessage);
         }

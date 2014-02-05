@@ -19,8 +19,19 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class HandlebarsCompilerVerticle extends BusModBase {
 
+    /**
+     * The event bus base address of this verticle.
+     */
     public static final String ADDRESS_BASE = HandlebarsCompilerVerticle.class.getName();
-    public static final String ADDRESS_COMPILE_FILE = ADDRESS_BASE + "/compileFile";
+
+    /**
+     * The event bus address to compile a template.
+     */
+    public static final String ADDRESS_COMPILE_FILE = ADDRESS_BASE + "/compile";
+
+    /**
+     * The error code returned by this verticle.
+     */
     public static final int ERR_CODE_BASE = 500;
 
     private static final String ERR_MSG_TMPL_COMPILE_FAILED = "failed to compile template: %1$s";
@@ -44,7 +55,6 @@ public class HandlebarsCompilerVerticle extends BusModBase {
     public void start() {
 
         super.start();
-        logger.info(String.format("starting %1$s ...", this.getClass().getSimpleName()));
 
         // initilialize members
         handlebars = new Handlebars();
@@ -72,7 +82,8 @@ public class HandlebarsCompilerVerticle extends BusModBase {
                 logger.debug(String.format("address %1$s received message: %2$s", compileMsg.address(),
                         compileMsg.body()));
             try {
-                final String templateLocation = compileMsg.body().getString(HandlebarsRendererVerticle.FIELD_TEMPLATE_LOCATION);
+                final String templateLocation = compileMsg.body().getString(
+                        HandlebarsRendererVerticle.FIELD_TEMPLATE_LOCATION);
                 final URL templateURL = Thread.currentThread().getContextClassLoader().getResource(templateLocation);
                 final TemplateSource templateSource = new URLTemplateSource(templateLocation, templateURL);
                 final Template template = handlebars.compile(new URLTemplateSource(templateLocation, templateURL));

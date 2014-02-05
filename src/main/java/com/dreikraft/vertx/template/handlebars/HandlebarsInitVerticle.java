@@ -25,46 +25,49 @@ public class HandlebarsInitVerticle extends BusModBase {
         container.logger().info(String.format("starting %1$s ...",
                 HandlebarsInitVerticle.class.getSimpleName()));
 
-        container.logger().info(String.format("starting %1$s instances ...", HandlebarsCompilerVerticle.class
-                .getSimpleName()));
         final int compilerInstances = getOptionalIntConfig("compilerInstances",
                 Runtime.getRuntime().availableProcessors());
+        container.logger().info(String.format("starting %1$d %2$s instances ...", compilerInstances,
+                HandlebarsCompilerVerticle.class.getSimpleName()));
         container.deployWorkerVerticle(HandlebarsCompilerVerticle.class.getName(), config, compilerInstances, false,
                 new AsyncResultHandler<String>() {
                     @Override
                     public void handle(AsyncResult<String> deployResult) {
                         if (deployResult.succeeded()) {
-                            logger.info(String.format("successfully started %1$s instances",
+                            logger.info(String.format("successfully started %1$d %2$s instances", compilerInstances,
                                     HandlebarsCompilerVerticle.class.getSimpleName()));
                             if (completed()) {
+                                container.logger().info(String.format("successfully started %1$s ...",
+                                        HandlebarsInitVerticle.class.getSimpleName()));
                                 startedResult.setResult(null);
                             }
                         } else {
-                            logger.info(String.format("failed to start %1$s instances",
-                                    HandlebarsCompilerVerticle.class.getSimpleName()
-                            ));
+                            logger.info(String.format("failed to start %1$d %2$s instances", compilerInstances,
+                                    HandlebarsCompilerVerticle.class.getSimpleName()));
                             startedResult.setFailure(deployResult.cause());
                         }
                     }
                 });
 
-        container.logger().info(String.format("starting %1$s instances ...", HandlebarsRendererVerticle.class.getSimpleName()));
         final int rendererInstances = getOptionalIntConfig("rendererInstances",
                 Runtime.getRuntime().availableProcessors());
+        container.logger().info(String.format("starting %1$d %2$s instances ...", rendererInstances,
+                HandlebarsRendererVerticle.class.getSimpleName()));
         container.deployWorkerVerticle(HandlebarsRendererVerticle.class.getName(), config, rendererInstances, false,
                 new AsyncResultHandler<String>() {
                     @Override
                     public void handle(AsyncResult<String> deployResult) {
                         if (deployResult.succeeded()) {
-                            logger.info(String.format("successfully started %1$s instances",
+                            logger.info(String.format("successfully started %1$d %2$s instances", rendererInstances,
                                     HandlebarsRendererVerticle.class.getSimpleName()));
                             if (completed()) {
+                                container.logger().info(String.format("successfully started %1$s ...",
+                                        HandlebarsInitVerticle.class.getSimpleName()));
                                 startedResult.setResult(null);
                             }
                         } else {
-                            logger.info(String.format("failed to start %1$s instances", HandlebarsRendererVerticle.class
-                                    .getSimpleName()
-                            ));
+                            logger.info(String.format("failed to start %1$d %2$s instances", rendererInstances,
+                                    HandlebarsRendererVerticle.class.getSimpleName()));
                             startedResult.setFailure(deployResult.cause());
                         }
                     }
