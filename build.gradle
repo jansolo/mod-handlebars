@@ -85,7 +85,7 @@ def configurePom(def pom) {
     inceptionYear '2014'
     packaging 'jar'
 
-    url 'http://github.com/jansolo/vertx-handlebars'
+    url 'http://github.com/jansolo/mod-handlebars'
 
     developers {
       developer {
@@ -96,7 +96,7 @@ def configurePom(def pom) {
     }
 
     scm {
-      url 'http://github.com/jansolo/vertx-handlebars'
+      url 'http://github.com/jansolo/mod-handlebars'
     }
 
     licenses {

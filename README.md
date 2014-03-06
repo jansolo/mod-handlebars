@@ -12,12 +12,12 @@ and render the mustache and handlebar templates.
 
 ## Module
 
-Deploy the module `3kraft~mod-handlebars~0.2` in the `start()` method of your verticle.
+Deploy the module `jansolo~mod-handlebars~0.2` in the `start()` method of your verticle.
 
 ## Standalone
 
 ```
-vertx runmod 3kraft~mod-handlebars~0.2
+vertx runmod jansolo~mod-handlebars~0.2
 ```
 
 ## Configuration
@@ -103,13 +103,6 @@ vertx.eventBus().sendWithTimeout("com.dreikraft.vertx.template.handlebars.Handle
                 }
             }
         });
-```
-
-
-## Flush the compiled template cache
-
-Removes all compiled templates from the shared cache `handlebar.templates.cache`.
-
  - Address: `com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/flush`
  - Message (Void)
  - Reply:
@@ -128,3 +121,10 @@ vertx.eventBus().sendWithTimeout(HandlebarsVerticle.ADDRESS_FLUSH,
             container.logger().error(renderResult.cause());
          }
  ```
+
+```
+
+
+## Flush the compiled template cache
+
+Removes all compiled templates from the shared cache `handlebar.templates.cache`.
