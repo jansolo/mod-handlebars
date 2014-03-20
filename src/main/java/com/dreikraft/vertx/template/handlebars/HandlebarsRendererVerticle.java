@@ -61,16 +61,16 @@ public class HandlebarsRendererVerticle extends BusModBase {
 
     /**
      * Initialize the handlebar template handlers on the eventbus. Following handlers are registered:
-     * <p/>
      * <ul>
-     * <li>com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/render
-     * <p>renders a template with the given data:
-     * <code>{"templateLocation": "templates/hello.hbs", "data": {...}}</code></p>
+     * <li><code>com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/render</code> ...
+     * renders a template with the given data:
+     * <code>{"templateLocation": "templates/hello.hbs", "data": {...}}</code>
      * </li>
-     * <li>com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/flush
-     * <p>Flushes the shared template cache</p>
+     * <li><code>com.dreikraft.vertx.template.handlebars.HandlebarsRendererVerticle/flush</code> ...
+     * Flushes the shared template cache
      * </li>
-     * <p/>
+     * </ul>
+     *
      * Compiled templates are stored in a shared template cache. The verticle will check, if the template in the cache
      * is up-to-date based on its last-modified date.
      */

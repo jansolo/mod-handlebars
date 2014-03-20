@@ -16,8 +16,8 @@ public final class SharedTemplate implements Shareable {
     /**
      * Creates a new immutable SharedTemplate instance.
      *
-     * @param template
-     * @param timestamp
+     * @param template a template
+     * @param timestamp a timestamp
      */
     public SharedTemplate(final Template template, final Date timestamp) {
         this.template = template;

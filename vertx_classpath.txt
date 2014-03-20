@@ -1,0 +1,5 @@
+src/main/resources
+bin
+out/production/mod-handlebars
+out/test/mod-handlebars
+build/deps

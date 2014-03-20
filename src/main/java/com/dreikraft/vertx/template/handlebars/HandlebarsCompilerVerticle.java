@@ -42,13 +42,13 @@ public class HandlebarsCompilerVerticle extends BusModBase {
 
     /**
      * Initialize the handlebar template compilers on the eventbus. Following handlers are registered:
-     * <p/>
+     *
      * <ul>
      * <li>com.dreikraft.vertx.template.handlebars.HandlebarsCompileVerticle/compile
      * <p>compiles a template with the given location on the classpath: "templates/hello.hbs"</p>
      * </li>
      * </ul>
-     * <p/>
+     *
      * Compiled templates are stored in a shared template cache.
      */
     @Override
