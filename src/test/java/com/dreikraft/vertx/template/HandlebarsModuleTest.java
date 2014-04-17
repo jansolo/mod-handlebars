@@ -6,6 +6,7 @@ import com.dreikraft.vertx.template.handlebars.SharedTemplate;
 import org.junit.Test;
 import org.vertx.java.core.AsyncResult;
 import org.vertx.java.core.AsyncResultHandler;
+import org.vertx.java.core.Handler;
 import org.vertx.java.core.eventbus.Message;
 import org.vertx.java.core.json.JsonObject;
 import org.vertx.testtools.TestVerticle;
@@ -23,7 +24,6 @@ import java.nio.file.attribute.FileTime;
  */
 public class HandlebarsModuleTest extends TestVerticle {
 
-    private static final long REPLY_TIMEOUT = 60 * 1000;
     private static final String HELLO_WORLD = "hello world!";
 
     /**
@@ -62,19 +62,21 @@ public class HandlebarsModuleTest extends TestVerticle {
                 .putObject("data", data);
 
         // needs to compile template
-        vertx.eventBus().sendWithTimeout(HandlebarsRendererVerticle.ADDRESS_RENDER_FILE, msg, REPLY_TIMEOUT,
-                new AsyncResultHandler<Message<JsonObject>>() {
+        vertx.eventBus().send(HandlebarsRendererVerticle.ADDRESS_RENDER_FILE, msg,
+                new Handler<Message<JsonObject>>() {
                     @Override
-                    public void handle(AsyncResult<Message<JsonObject>> renderResult) {
-                        if (renderResult.succeeded()) {
-                            VertxAssert.assertEquals(HELLO_WORLD, renderResult.result().body().getString(
+                    public void handle(final Message<JsonObject> renderResult) {
+                        try {
+                            VertxAssert.assertEquals("ok", renderResult.body().getString("status"));
+                            VertxAssert.assertEquals(HELLO_WORLD, renderResult.body().getString(
                                     HandlebarsRendererVerticle.FIELD_RENDER_RESULT));
-                        } else {
-                            VertxAssert.fail(renderResult.cause().getMessage());
+                        } catch (RuntimeException ex) {
+                            VertxAssert.fail(ex.getMessage());
                         }
                         VertxAssert.testComplete();
                     }
-                });
+                }
+        );
     }
 
     /**
@@ -85,20 +87,22 @@ public class HandlebarsModuleTest extends TestVerticle {
 
         final String templateLocation = "templates/hello.hbs";
 
-        vertx.eventBus().sendWithTimeout(HandlebarsCompilerVerticle.ADDRESS_COMPILE_FILE,
+        vertx.eventBus().send(HandlebarsCompilerVerticle.ADDRESS_COMPILE_FILE,
                 new JsonObject().putString(HandlebarsRendererVerticle.FIELD_TEMPLATE_LOCATION, templateLocation),
-                REPLY_TIMEOUT, new AsyncResultHandler<Message<JsonObject>>() {
-            @Override
-            public void handle(AsyncResult<Message<JsonObject>> compileResult) {
-                if (compileResult.succeeded()) {
-                    VertxAssert.assertNotNull(vertx.sharedData().getMap(
-                            HandlebarsRendererVerticle.HANDLEBAR_TEMPLATES_CACHE).get(templateLocation));
-                } else {
-                    VertxAssert.fail(compileResult.cause().getMessage());
+                new Handler<Message<JsonObject>>() {
+                    @Override
+                    public void handle(final Message<JsonObject> compileResult) {
+                        try {
+                            VertxAssert.assertEquals("ok", compileResult.body().getString("status"));
+                            VertxAssert.assertNotNull(vertx.sharedData().getMap(
+                                    HandlebarsRendererVerticle.HANDLEBAR_TEMPLATES_CACHE).get(templateLocation));
+                        } catch (RuntimeException ex) {
+                            VertxAssert.fail(ex.getMessage());
+                        }
+                        VertxAssert.testComplete();
+                    }
                 }
-                VertxAssert.testComplete();
-            }
-        });
+        );
     }
 
     /**
@@ -108,35 +112,39 @@ public class HandlebarsModuleTest extends TestVerticle {
     public void testFlush() {
 
         final String templateLocation = "templates/hello.hbs";
-        vertx.eventBus().sendWithTimeout(HandlebarsCompilerVerticle.ADDRESS_COMPILE_FILE,
-                new JsonObject().putString("templateLocation", "templates/hello.hbs"), REPLY_TIMEOUT,
-                new AsyncResultHandler<Message<JsonObject>>() {
-            @Override
-            public void handle(AsyncResult<Message<JsonObject>> compileResult) {
-                if (compileResult.succeeded()) {
-                    VertxAssert.assertNotNull(vertx.sharedData().getMap(HandlebarsRendererVerticle.HANDLEBAR_TEMPLATES_CACHE)
-                            .get(templateLocation));
-                    vertx.eventBus().sendWithTimeout(HandlebarsRendererVerticle.ADDRESS_FLUSH,
-                            (Object) null, REPLY_TIMEOUT, new AsyncResultHandler<Message<JsonObject>>() {
+        vertx.eventBus().send(HandlebarsCompilerVerticle.ADDRESS_COMPILE_FILE,
+                new JsonObject().putString("templateLocation", "templates/hello.hbs"),
+                new Handler<Message<JsonObject>>() {
+                    @Override
+                    public void handle(final Message<JsonObject> compileResult) {
+                        try {
+                            VertxAssert.assertEquals("ok", compileResult.body().getString("status"));
+                            VertxAssert.assertNotNull(vertx.sharedData().getMap(HandlebarsRendererVerticle
+                                    .HANDLEBAR_TEMPLATES_CACHE).get(templateLocation));
+                            vertx.eventBus().send(HandlebarsRendererVerticle.ADDRESS_FLUSH, new JsonObject(),
+                                    new Handler<Message<JsonObject>>() {
 
-                        @Override
-                        public void handle(AsyncResult<Message<JsonObject>> flushResult) {
-                            if (flushResult.succeeded()) {
-                                VertxAssert.assertNull(vertx.sharedData().getMap(
-                                        HandlebarsRendererVerticle.HANDLEBAR_TEMPLATES_CACHE).get(templateLocation));
-                            } else {
-                                VertxAssert.fail(flushResult.cause().getMessage());
-                            }
+                                        @Override
+                                        public void handle(final Message<JsonObject> flushResult) {
+                                            try {
+                                                VertxAssert.assertEquals("ok", flushResult.body().getString("status"));
+                                                VertxAssert.assertNull(vertx.sharedData().getMap(
+                                                        HandlebarsRendererVerticle.HANDLEBAR_TEMPLATES_CACHE).get
+                                                        (templateLocation));
+                                            } catch (RuntimeException ex) {
+                                                VertxAssert.fail(ex.getMessage());
+                                            }
+                                            VertxAssert.testComplete();
+                                        }
+                                    }
+                            );
+                        } catch (RuntimeException ex) {
+                            VertxAssert.fail(ex.getMessage());
                             VertxAssert.testComplete();
                         }
-                    });
-
-                } else {
-                    VertxAssert.fail(compileResult.cause().getMessage());
-                    VertxAssert.testComplete();
+                    }
                 }
-            }
-        });
+        );
     }
 
     /**
@@ -146,55 +154,48 @@ public class HandlebarsModuleTest extends TestVerticle {
     public void testOutDated() {
 
         final String templateLocation = "templates/hello.hbs";
-        vertx.eventBus().sendWithTimeout(HandlebarsCompilerVerticle.ADDRESS_COMPILE_FILE,
-                new JsonObject().putString("templateLocation", templateLocation),
-                REPLY_TIMEOUT, new AsyncResultHandler<Message<JsonObject>>() {
-            @Override
-            public void handle(AsyncResult<Message<JsonObject>> compileResult) {
-                if (compileResult.succeeded()) {
-                    VertxAssert.assertNotNull(vertx.sharedData().getMap(HandlebarsRendererVerticle.HANDLEBAR_TEMPLATES_CACHE)
-                            .get(templateLocation));
-                    try {
-                        final Path templateLocationPath = Paths.get(Thread.currentThread().getContextClassLoader()
-                                .getResource(templateLocation).toURI());
-                        Files.setLastModifiedTime(templateLocationPath, FileTime.fromMillis(
-                                System.currentTimeMillis()));
-                        final JsonObject data = new JsonObject().putString("text", "world");
-                        final JsonObject msg = new JsonObject().putString("templateLocation", templateLocation)
-                                .putObject("data", data);
+        vertx.eventBus().send(HandlebarsCompilerVerticle.ADDRESS_COMPILE_FILE,
+                new JsonObject().putString("templateLocation", templateLocation), new Handler<Message<JsonObject>>() {
+                    @Override
+                    public void handle(final Message<JsonObject> compileResult) {
+                        try {
+                            VertxAssert.assertEquals("ok", compileResult.body().getString("status"));
+                            VertxAssert.assertNotNull(vertx.sharedData().getMap(HandlebarsRendererVerticle.HANDLEBAR_TEMPLATES_CACHE)
+                                    .get(templateLocation));
+                            final Path templateLocationPath = Paths.get(Thread.currentThread().getContextClassLoader()
+                                    .getResource(templateLocation).toURI());
+                            Files.setLastModifiedTime(templateLocationPath, FileTime.fromMillis(
+                                    System.currentTimeMillis()));
+                            final JsonObject data = new JsonObject().putString("text", "world");
+                            final JsonObject msg = new JsonObject().putString("templateLocation", templateLocation)
+                                    .putObject("data", data);
 
-                        // needs to compile template
-                        vertx.eventBus().sendWithTimeout(HandlebarsRendererVerticle.ADDRESS_RENDER_FILE, msg,
-                                REPLY_TIMEOUT, new AsyncResultHandler<Message<JsonObject>>() {
-                            @Override
-                            public void handle(AsyncResult<Message<JsonObject>> renderResult) {
-                                if (renderResult.succeeded()) {
-                                    VertxAssert.assertEquals(HELLO_WORLD, renderResult.result().body().getString
-                                            (HandlebarsRendererVerticle.FIELD_RENDER_RESULT));
-                                    final SharedTemplate sharedTemplate = (SharedTemplate) vertx.sharedData().getMap
-                                            (HandlebarsRendererVerticle.HANDLEBAR_TEMPLATES_CACHE).get(templateLocation);
-                                    try {
-                                        VertxAssert.assertEquals(Files.getLastModifiedTime(templateLocationPath)
-                                                .toMillis(), sharedTemplate.getTimestamp().getTime());
-                                    } catch (IOException e) {
-                                        VertxAssert.fail(e.getMessage());
+                            // needs to compile template
+                            vertx.eventBus().send(HandlebarsRendererVerticle.ADDRESS_RENDER_FILE, msg,
+                                    new Handler<Message<JsonObject>>() {
+                                        @Override
+                                        public void handle(final Message<JsonObject> renderResult) {
+                                            try {
+                                                VertxAssert.assertEquals("ok", renderResult.body().getString("status"));
+                                                VertxAssert.assertEquals(HELLO_WORLD, renderResult.body().getString
+                                                        (HandlebarsRendererVerticle.FIELD_RENDER_RESULT));
+                                                final SharedTemplate sharedTemplate = (SharedTemplate) vertx.sharedData().getMap
+                                                        (HandlebarsRendererVerticle.HANDLEBAR_TEMPLATES_CACHE).get(templateLocation);
+                                                VertxAssert.assertEquals(Files.getLastModifiedTime(templateLocationPath)
+                                                        .toMillis(), sharedTemplate.getTimestamp().getTime());
+                                            } catch (IOException | RuntimeException ex) {
+                                                VertxAssert.fail(ex.getMessage());
+                                            }
+                                            VertxAssert.testComplete();
+                                        }
                                     }
-                                } else {
-                                    VertxAssert.fail(renderResult.cause().getMessage());
-                                }
-                                VertxAssert.testComplete();
-                            }
-                        });
-
-                    } catch (IOException | URISyntaxException e) {
-                        VertxAssert.fail(e.getMessage());
-                        VertxAssert.testComplete();
+                            );
+                        } catch (RuntimeException | IOException | URISyntaxException ex) {
+                            VertxAssert.fail(ex.getMessage());
+                            VertxAssert.testComplete();
+                        }
                     }
-                } else {
-                    VertxAssert.fail(compileResult.cause().getMessage());
-                    VertxAssert.testComplete();
                 }
-            }
-        });
+        );
     }
 }

@@ -5,7 +5,6 @@ import org.vertx.java.core.AsyncResult;
 import org.vertx.java.core.AsyncResultHandler;
 import org.vertx.java.core.Handler;
 import org.vertx.java.core.eventbus.Message;
-import org.vertx.java.core.eventbus.ReplyException;
 import org.vertx.java.core.file.FileProps;
 import org.vertx.java.core.json.JsonObject;
 
@@ -30,10 +29,6 @@ public class HandlebarsRendererVerticle extends BusModBase {
      * The event bus address to flush the shared template cache.
      */
     public static final String ADDRESS_FLUSH = ADDRESS_BASE + "/flush";
-    /**
-     * The error code returned by this verticle in case of an error.
-     */
-    public static final int ERR_CODE_BASE = 500;
     /**
      * JSON property name "templateLocation" (String).
      */
@@ -70,7 +65,7 @@ public class HandlebarsRendererVerticle extends BusModBase {
      * Flushes the shared template cache
      * </li>
      * </ul>
-     *
+     * <p>
      * Compiled templates are stored in a shared template cache. The verticle will check, if the template in the cache
      * is up-to-date based on its last-modified date.
      */
@@ -105,17 +100,24 @@ public class HandlebarsRendererVerticle extends BusModBase {
          */
         @Override
         public void handle(final Message<JsonObject> renderMsg) {
-            if (logger.isDebugEnabled())
-                logger.debug(String.format("address %1$s received message: %2$s", renderMsg.address(),
-                        renderMsg.body().encodePrettily()));
-            final JsonObject renderCtx = renderMsg.body();
-            final String templateLocation = renderCtx.getString(FIELD_TEMPLATE_LOCATION);
-            final SharedTemplate sharedTemplate = templateCache.get(templateLocation);
-            if (getOptionalBooleanConfig(CONFIG_AUTO_UPDATE, true)) {
-                vertx.fileSystem().props(templateLocation, new TemplateUpToDateHandler(sharedTemplate, renderMsg,
-                        templateLocation));
-            } else {
-                render(sharedTemplate, renderMsg);
+            String templateLocation = null;
+            try {
+                if (logger.isDebugEnabled())
+                    logger.debug(String.format("address %1$s received message: %2$s", renderMsg.address(),
+                            renderMsg.body().encodePrettily()));
+                final JsonObject renderCtx = renderMsg.body();
+                templateLocation = renderCtx.getString(FIELD_TEMPLATE_LOCATION);
+                final SharedTemplate sharedTemplate = templateCache.get(templateLocation);
+                if (getOptionalBooleanConfig(CONFIG_AUTO_UPDATE, true)) {
+                    vertx.fileSystem().props(templateLocation, new TemplateUpToDateHandler(sharedTemplate, renderMsg,
+                            templateLocation));
+                } else {
+                    sendOK(renderMsg, render(sharedTemplate, renderMsg));
+                }
+            } catch (RuntimeException | IOException ex) {
+                final String errMsg =
+                        String.format(ERR_MSG_RENDER_FAILED, templateLocation, renderMsg.body().encode());
+                sendError(renderMsg, errMsg, ex);
             }
         }
 
@@ -125,23 +127,16 @@ public class HandlebarsRendererVerticle extends BusModBase {
          * @param sharedTemplate a shared template instance
          * @param renderMsg      a Json Message with the "data" JsonObject and the "templateLocation" as string
          */
-        private void render(final SharedTemplate sharedTemplate, final Message<JsonObject> renderMsg) {
+        private JsonObject render(final SharedTemplate sharedTemplate, final Message<JsonObject> renderMsg)
+                throws IOException {
             final JsonObject data = renderMsg.body().getObject(FIELD_DATA);
-            try {
-                sendOK(renderMsg, new JsonObject().putString(FIELD_RENDER_RESULT,
-                        sharedTemplate.getTemplate().apply(data.toMap())));
-            } catch (IOException e) {
-                final String msg = String.format(ERR_MSG_RENDER_FAILED,
-                        renderMsg.body().getString(FIELD_TEMPLATE_LOCATION), data.encode());
-                logger.error(msg, e);
-                renderMsg.fail(ERR_CODE_BASE, msg);
-            }
+            return new JsonObject().putString(FIELD_RENDER_RESULT, sharedTemplate.getTemplate().apply(data.toMap()));
         }
 
         /**
          * Handles the result from template compilation.
          */
-        private class CompileResultHandler implements AsyncResultHandler<Message<JsonObject>> {
+        private class CompileResultHandler implements Handler<Message<JsonObject>> {
             private final String templateLocation;
             private final Message<JsonObject> renderMsg;
 
@@ -162,12 +157,18 @@ public class HandlebarsRendererVerticle extends BusModBase {
              * @param compileResultMsg returns the rendered page
              */
             @Override
-            public void handle(AsyncResult<Message<JsonObject>> compileResultMsg) {
-                if (compileResultMsg.succeeded()) {
-                    render(templateCache.get(templateLocation), renderMsg);
-                } else {
-                    final ReplyException ex = (ReplyException) compileResultMsg.cause();
-                    renderMsg.fail(ex.failureCode(), ex.getMessage());
+            public void handle(final Message<JsonObject> compileResultMsg) {
+
+                try {
+                    if ("ok".equals(compileResultMsg.body().getString("status"))) {
+                        sendOK(renderMsg, render(templateCache.get(templateLocation), renderMsg));
+                    } else {
+                        sendError(renderMsg, ERR_MSG_RENDER_FAILED);
+                    }
+                } catch (RuntimeException | IOException ex) {
+                    final String errMsg =
+                            String.format(ERR_MSG_RENDER_FAILED, templateLocation, renderMsg.body().encode());
+                    sendError(renderMsg, errMsg, ex);
                 }
             }
         }
@@ -201,22 +202,21 @@ public class HandlebarsRendererVerticle extends BusModBase {
              */
             @Override
             public void handle(AsyncResult<FileProps> templatePropsResult) {
-                if (templatePropsResult.succeeded()) {
+                try {
                     final FileProps templateProps = templatePropsResult.result();
                     if (sharedTemplate != null && !templateProps.lastModifiedTime().after(sharedTemplate
                             .getTimestamp())) {
-                        render(sharedTemplate, renderMsg);
+                        sendOK(renderMsg, render(sharedTemplate, renderMsg));
                     } else {
                         logger.info(String.format("template %1$s is out of date and will be compiled",
                                 templateLocation));
-                        eb.sendWithTimeout(HandlebarsCompilerVerticle.ADDRESS_COMPILE_FILE,
+                        eb.send(HandlebarsCompilerVerticle.ADDRESS_COMPILE_FILE,
                                 new JsonObject().putString(HandlebarsRendererVerticle.FIELD_TEMPLATE_LOCATION,
-                                        templateLocation),
-                                30 * 1000, new CompileResultHandler(templateLocation, renderMsg));
-
+                                        templateLocation), new CompileResultHandler(templateLocation, renderMsg)
+                        );
                     }
-                } else {
-                    renderMsg.fail(ERR_CODE_BASE, String.format(ERR_MSG_TEMPLATE_NOT_FOUND, templateLocation));
+                } catch (RuntimeException | IOException ex) {
+                    sendError(renderMsg, String.format(ERR_MSG_TEMPLATE_NOT_FOUND, templateLocation), ex);
                 }
             }
         }
@@ -234,9 +234,13 @@ public class HandlebarsRendererVerticle extends BusModBase {
          */
         @Override
         public void handle(Message<JsonObject> flushMessage) {
-            logger.info("flushing handlebars template cache");
-            templateCache.clear();
-            sendOK(flushMessage);
+            try {
+                logger.info("flushing handlebars template cache");
+                templateCache.clear();
+                sendOK(flushMessage);
+            } catch (RuntimeException ex) {
+                sendError(flushMessage, "failed to flush handlebars template cache", ex);
+            }
         }
     }
 }
