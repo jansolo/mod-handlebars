@@ -4,5 +4,6 @@
   "author": "Jan Illetschko",
   "keywords": ["handlebars", "template"],
   "main": "com.dreikraft.vertx.template.handlebars.HandlebarsInitVerticle",
+  "auto-redeploy": true,
   "preserve-cwd": true
 }
