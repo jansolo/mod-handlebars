@@ -54,10 +54,7 @@ dependencies {
   // If you're creating Groovy compiled verticles you may need the following dependencies
   //provided "org.codehaus.groovy:groovy-all:$groovyVersion"
   //provided "io.vertx:lang-groovy:$groovyLangModVersion@jar"
-  provided "org.mozilla:rhino:1.7R4"
-  compile("com.github.jknack:handlebars:1.2.1") {
-      exclude group: "org.mozilla", module: "rhino"
-  }
+  compile "com.github.jknack:handlebars:1.2.1"
 }
 
 test {
